@@ -5,6 +5,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.System;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryUsage;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,32 +28,40 @@ class Pair<T, U> {
 
 class APSDemo {
   public static final int RAND_SEED = 1337;
-  public static final int PRODUCT_NUM = 20000;
-  public static final int MACHINE_NUM = 20;
+  public static final int PRODUCT_NUM = 30000; // 30000 need ~4GB memory
+  public static final int MACHINE_NUM = 20; // >200 traverse get much slower
   public static final int PRIORITY_NUM = 5;
   public static final int MACHINE_PRODUCT_PER_HOUR = 500;
 
   public static final int MIN_PRODUCT_QUANTITY = 1000;
   public static final int MAX_PRODUCT_QUANTITY = 10000 - MIN_PRODUCT_QUANTITY;
   public static final int MIN_SWITCH_TIME = 1;
-  public static final int MAX_SWITCH_TIME = 10 - MIN_SWITCH_TIME;
+  public static final int MAX_SWITCH_TIME = 3 - MIN_SWITCH_TIME;
   public static final int MAX_ESD_DATE = 10;
   public static final int MIN_DUE_START_INTERVAL = 30;
   // public static final int MAX_DDL_DATE = 90 - MIN_DUE_START_INTERVAL;
   public static final int MAX_DDL_DATE =
       (int)(((double)PRODUCT_NUM * MAX_PRODUCT_QUANTITY / MACHINE_NUM /
              MACHINE_PRODUCT_PER_HOUR / 24) *
-            0.5) -
+            0.65) -
       MIN_DUE_START_INTERVAL; // dynamic interval index > 0.7 is loose bound
 
-  // 0: index order, totally random
-  // 1: priority ddl esd, priority is the most important
-  // 2: esd priority ddl, not vialate the esd is the most important
-  // 3: ddl priority esd, not vialate the ddl is the most important
-  // 4: ddl quantity priority, not vialate the ddl is the most important, perform better on random order
-  // 5: quantity ddl priority, utilization efficiency is the most important
-  // 6: quantity_lower ddl priority, if the ddl is too close, maker the smaller quantity first to avoid the late
-  public static final int SORT_METHOD = 6;
+  // 0: index Order           initial order
+  // 1: priority > ddl > esd
+  //                          priority is the most important
+  // 2: esd > priority > ddl
+  //                          not vialate the esd is the most important
+  // 3: ddl > priority > esd
+  //                          not vialate the ddl is the most important
+  // 4: ddl > quantity > priority
+  //                          not vialate the ddl is the most important,
+  //                      XXX: good for loose ddl model, unstable for tight ddl
+  // 5: quantity > ddl > priority
+  //                          utilization efficiency is the most important
+  // 6: quantity_lower > ddl > priority
+  //                          if the ddl is too close(must vialate), maker the
+  //                          smaller quantity first to max the unvialate order
+  public static final int SORT_METHOD = 4;
   public static final int PRINT_FLAG = 2; // 0: no print, 1: print running time,
                                           // 2: print summay 3. print all
   public static final boolean OUTPUT_JUMP_MATRIX = false;
@@ -144,7 +155,6 @@ class APSDemo {
   }
 
   public static List<Machine> generateRandomMachine(int size) {
-    // Random rand = new Random(RAND_SEED);
     List<Machine> machines = new ArrayList<>();
     for (int i = 0; i < size; i++) {
       Machine m = new Machine(i, "machine" + (i < 10 ? "0" + i : i), 0,
@@ -334,8 +344,8 @@ class APSDemo {
       // 4. same priority, if rt1 + rt2 < one of the order's due date, put the
       // one exceed the due date first assign the second one to o1 and compare
       // again next time
-      // TODO: if the due date is the same, the order with larger quantity
-      // FIXME: Potential bug: the output is not better than the original
+      // TODO: other rules to optimize the schedule
+      // FIXME: Potential bug: the output is not better than the original ???
       if (o1.priority > o2.priority) {
         best_machine.finishing_time += required_time1;
         best_machine.orders_in_queue.add(o1);
@@ -645,6 +655,8 @@ class APSDemo {
   }
 
   public static void main(String[] args) {
+    MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+    MemoryUsage heapMemoryUsage = memoryBean.getHeapMemoryUsage();
     // print out the final static parameters
     System.out.println("\n");
     System.out.print(
@@ -768,6 +780,8 @@ class APSDemo {
     case 1:
       System.out.println("Optimize switch time optimized -o1 time: " +
                          (endTime - startTime) + "ms\n");
+      System.out.println(
+          "Max Heap Memory: " + heapMemoryUsage.getMax() / 1024 / 1024 + "MB");
     default:
       break;
     }
