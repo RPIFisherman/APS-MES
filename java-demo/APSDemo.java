@@ -28,23 +28,24 @@ class Pair<T, U> {
 
 class APSDemo {
   public static final int RAND_SEED = 1337;
-  public static final int PRODUCT_NUM = 30000; // 30000 need ~4GB memory
-  public static final int MACHINE_NUM = 20; // >200 traverse get much slower
+  public static final int PRODUCT_NUM = 30000; // 40000 need ~8GB memory -Xmx8G
+  public static final int MACHINE_NUM = 20;    // >200 traverse get much slower
   public static final int PRIORITY_NUM = 5;
-  public static final int MACHINE_PRODUCT_PER_HOUR = 500;
+  public static final int MACHINE_PRODUCT_PER_HOUR = 500; // high speed low drag
 
   public static final int MIN_PRODUCT_QUANTITY = 1000;
   public static final int MAX_PRODUCT_QUANTITY = 10000 - MIN_PRODUCT_QUANTITY;
+  // large switch time will make the stf algo perform better
   public static final int MIN_SWITCH_TIME = 1;
   public static final int MAX_SWITCH_TIME = 3 - MIN_SWITCH_TIME;
   public static final int MAX_ESD_DATE = 10;
   public static final int MIN_DUE_START_INTERVAL = 30;
   // public static final int MAX_DDL_DATE = 90 - MIN_DUE_START_INTERVAL;
+  // dynamic interval index >= 0.7 is loose bound, 0.5 is 'expected' bound
   public static final int MAX_DDL_DATE =
       (int)(((double)PRODUCT_NUM * MAX_PRODUCT_QUANTITY / MACHINE_NUM /
              MACHINE_PRODUCT_PER_HOUR / 24) *
-            0.65) -
-      MIN_DUE_START_INTERVAL; // dynamic interval index > 0.7 is loose bound
+            0.6);
 
   // 0: index Order           initial order
   // 1: priority > ddl > esd
@@ -62,8 +63,9 @@ class APSDemo {
   //                          if the ddl is too close(must vialate), maker the
   //                          smaller quantity first to max the unvialate order
   public static final int SORT_METHOD = 4;
-  public static final int PRINT_FLAG = 2; // 0: no print, 1: print running time,
-                                          // 2: print summay 3. print all
+  // 0: no print, 1: print running time, 2: print summay,
+  // 3. print order summay, 4. print all
+  public static final int PRINT_FLAG = 2;
   public static final boolean OUTPUT_JUMP_MATRIX = false;
   public static final boolean OUTPUT_SCHEDULE = false;
 
@@ -93,7 +95,8 @@ class APSDemo {
     public String name;
     public int finishing_time;
     public int machine_product_per_hour;
-    public List<Order> orders_in_queue;
+    //TODO: use linked list for better performance?
+    public List<Order> orders_in_queue; 
 
     public Machine(int id, String n, int c, int mph) {
       machine_id = id;
@@ -344,7 +347,7 @@ class APSDemo {
       // 4. same priority, if rt1 + rt2 < one of the order's due date, put the
       // one exceed the due date first assign the second one to o1 and compare
       // again next time
-      // TODO: other rules to optimize the schedule
+      // TODO: find other rules to optimize the schedule
       // FIXME: Potential bug: the output is not better than the original ???
       if (o1.priority > o2.priority) {
         best_machine.finishing_time += required_time1;
@@ -710,9 +713,9 @@ class APSDemo {
       outputJPMatrix2CSV(jump_matrix, "jump_matrix.csv");
     }
 
-    long startTime = System.currentTimeMillis();
+    long startTime = System.nanoTime();
     first_free_Machines(orders, jump_matrix, machines);
-    long endTime = System.currentTimeMillis();
+    long endTime = System.nanoTime();
     switch (PRINT_FLAG) {
     case 4:
       printOrders(orders);
@@ -721,8 +724,8 @@ class APSDemo {
     case 2:
       evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
     case 1:
-      System.out.println("First free machine time: " + (endTime - startTime) +
-                         "ms\n");
+      System.out.println("First free machine time: " +
+                         (double)(endTime - startTime) / 1000000 + "ms\n");
     default:
       break;
     }
@@ -731,9 +734,9 @@ class APSDemo {
     }
 
     cleanMachine(machines);
-    startTime = System.currentTimeMillis();
+    startTime = System.nanoTime();
     first_free_Machines_optimize1(orders, jump_matrix, machines);
-    endTime = System.currentTimeMillis();
+    endTime = System.nanoTime();
     switch (PRINT_FLAG) {
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
@@ -741,7 +744,7 @@ class APSDemo {
       evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("First free machine optimized -o1 time: " +
-                         (endTime - startTime) + "ms\n");
+                         (double)(endTime - startTime) / 1000000 + "ms\n");
     default:
       break;
     }
@@ -750,17 +753,17 @@ class APSDemo {
     }
 
     cleanMachine(machines);
-    startTime = System.currentTimeMillis();
+    startTime = System.nanoTime();
     optimize_switch_time(orders, jump_matrix, machines);
-    endTime = System.currentTimeMillis();
+    endTime = System.nanoTime();
     switch (PRINT_FLAG) {
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
     case 2:
       evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
     case 1:
-      System.out.println("Optimize switch time time: " + (endTime - startTime) +
-                         "ms\n");
+      System.out.println("Optimize switch time time: " +
+                         (double)(endTime - startTime) / 1000000 + "ms\n");
     default:
       break;
     }
@@ -769,9 +772,9 @@ class APSDemo {
     }
 
     cleanMachine(machines);
-    startTime = System.currentTimeMillis();
+    startTime = System.nanoTime();
     optimize_switch_time_optimize1(orders, jump_matrix, machines);
-    endTime = System.currentTimeMillis();
+    endTime = System.nanoTime();
     switch (PRINT_FLAG) {
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
@@ -779,7 +782,7 @@ class APSDemo {
       evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("Optimize switch time optimized -o1 time: " +
-                         (endTime - startTime) + "ms\n");
+                         (double)(endTime - startTime) / 1000000 + "ms\n");
       System.out.println(
           "Max Heap Memory: " + heapMemoryUsage.getMax() / 1024 / 1024 + "MB");
     default:
