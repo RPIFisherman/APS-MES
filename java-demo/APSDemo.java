@@ -28,7 +28,7 @@ class Pair<T, U> {
 
 class APSDemo {
   public static final int RAND_SEED = 1337;
-  public static final int PRODUCT_NUM = 30000; // 40000 need ~8GB memory -Xmx8G
+  public static final int PRODUCT_NUM = 30000; // 40000 need ~8GB memory
   public static final int MACHINE_NUM = 20;    // >200 traverse get much slower
   public static final int PRIORITY_NUM = 5;
   public static final int MACHINE_PRODUCT_PER_HOUR = 500; // high speed low drag
