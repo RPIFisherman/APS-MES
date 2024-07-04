@@ -56,6 +56,7 @@
     public int due_date;
     public int priority;
     public int earlest_start_date;
+    public int product_type;
 
     ...
   }
@@ -76,10 +77,10 @@
 **Optimize switch time optimized -o1**
 
 ```java
-  // store the fist free machines when having same jump time
+  // store the fist free machines when having same switch time
   public static List<Machine>
   optimize_switch_time_optimize1(final List<Order> orders,
-                                 final List<List<Integer>> jump_matrix,
+                                 final List<List<Integer>> switch_matrix,
                                  List<Machine> machines) {
     PriorityQueue<Machine> machine_queue =
         new PriorityQueue<>(new CompareMachineByFreeTime());
@@ -87,7 +88,7 @@
       machine_queue.clear();
       int machine_queue_switch_time = Integer.MAX_VALUE;
       for (Machine m : machines) {
-        int switch_time = getJumpTime(jump_matrix, m.getLastOrder(), o);
+        int switch_time = getswitchTime(switch_matrix, m.getLastOrder(), o);
         if (switch_time < machine_queue_switch_time) {
           machine_queue.clear();
           machine_queue.add(m);
@@ -137,7 +138,7 @@ The function `optimize_switch_time_optimize1` is designed to assign orders to ma
 
    ```java
    for (Machine m : machines) {
-       int switch_time = getJumpTime(jump_matrix, m.getLastOrder(), o);
+       int switch_time = getswitchTime(switch_matrix, m.getLastOrder(), o);
        if (switch_time < machine_queue_switch_time) {
            machine_queue.clear();
            machine_queue.add(m);
@@ -148,7 +149,7 @@ The function `optimize_switch_time_optimize1` is designed to assign orders to ma
    }
    ```
 
-   - For each machine, the switch time to the current order is calculated using the `getJumpTime` method.
+   - For each machine, the switch time to the current order is calculated using the `getswitchTime` method.
    - If the calculated switch time is less than the current minimum `machine_queue_switch_time`, the priority queue is cleared and the current machine is added to the queue, and the minimum switch time is updated.
    - If the calculated switch time equals the current minimum, the machine is added to the queue without clearing it.
 

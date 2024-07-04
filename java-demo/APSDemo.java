@@ -4,6 +4,7 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.Math;
 import java.lang.System;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -28,24 +29,26 @@ class Pair<T, U> {
 
 class APSDemo {
   public static final int RAND_SEED = 1337;
-  public static final int PRODUCT_NUM = 30000; // 40000 need ~8GB memory
-  public static final int MACHINE_NUM = 20;    // >200 traverse get much slower
+  public static final int PRODUCT_NUM = 100000;     // 20000000 needs ~4GB
+  public static final int PRODUCT_TYPE_NUM = 40; // Size of the switch matrix
+  public static final int MACHINE_NUM = 20; // >200 traverse get much slower
   public static final int PRIORITY_NUM = 5;
-  public static final int MACHINE_PRODUCT_PER_HOUR = 500; // high speed low drag
+  public static final int MACHINE_PRODUCT_PER_HOUR = 200; // high speed low drag
 
   public static final int MIN_PRODUCT_QUANTITY = 1000;
   public static final int MAX_PRODUCT_QUANTITY = 10000 - MIN_PRODUCT_QUANTITY;
   // large switch time will make the stf algo perform better
-  public static final int MIN_SWITCH_TIME = 1;
+  public static final int MIN_SWITCH_TIME = 0;
   public static final int MAX_SWITCH_TIME = 3 - MIN_SWITCH_TIME;
   public static final int MAX_ESD_DATE = 10;
   public static final int MIN_DUE_START_INTERVAL = 30;
-  // public static final int MAX_DDL_DATE = 90 - MIN_DUE_START_INTERVAL;
+  // public static final int MAX_DDL_DATE = 45 - MIN_DUE_START_INTERVAL;
   // dynamic interval index >= 0.7 is loose bound, 0.5 is 'expected' bound
   public static final int MAX_DDL_DATE =
-      (int)(((double)PRODUCT_NUM * MAX_PRODUCT_QUANTITY / MACHINE_NUM /
-             MACHINE_PRODUCT_PER_HOUR / 24) *
-            0.6);
+      Math.max((int)(((double)PRODUCT_NUM * MAX_PRODUCT_QUANTITY / MACHINE_NUM /
+                      MACHINE_PRODUCT_PER_HOUR / 24) *
+                     0.6),
+               1);
 
   // 0: index Order           initial order
   // 1: priority > ddl > esd
@@ -66,10 +69,10 @@ class APSDemo {
   // 0: no print, 1: print running time, 2: print summay,
   // 3. print order summay, 4. print all
   public static final int PRINT_FLAG = 2;
-  public static final boolean OUTPUT_JUMP_MATRIX = false;
+  public static final boolean OUTPUT_SWITCH_MATRIX = false;
   public static final boolean OUTPUT_SCHEDULE = false;
 
-  public static DecimalFormat df = new DecimalFormat("0.00");
+  public static DecimalFormat df = new DecimalFormat("0.000");
 
   // TODO add sales order, production order, extend both from order
   public static class Order {
@@ -79,14 +82,16 @@ class APSDemo {
     public int due_date;
     public int priority;
     public int earlest_start_date;
+    public int product_type;
 
-    public Order(int id, String n, int q, int d, int p, int e) {
+    public Order(int id, String n, int q, int d, int p, int e, int pt) {
       order_id = id;
       name = n;
       quantity = q;
       due_date = d;
       priority = p;
       earlest_start_date = e;
+      product_type = pt;
     }
   }
 
@@ -95,8 +100,8 @@ class APSDemo {
     public String name;
     public int finishing_time;
     public int machine_product_per_hour;
-    //TODO: use linked list for better performance?
-    public List<Order> orders_in_queue; 
+    // TODO: use linked list for better performance?
+    public List<Order> orders_in_queue;
 
     public Machine(int id, String n, int c, int mph) {
       machine_id = id;
@@ -133,28 +138,30 @@ class APSDemo {
           ((rand.nextInt(MAX_PRODUCT_QUANTITY) + MIN_PRODUCT_QUANTITY) /
            MACHINE_PRODUCT_PER_HOUR) *
               MACHINE_PRODUCT_PER_HOUR,
-          due_date, rand.nextInt(PRIORITY_NUM), earlest_start_date);
+          due_date, rand.nextInt(PRIORITY_NUM), earlest_start_date,
+          rand.nextInt(PRODUCT_TYPE_NUM));
       orders.add(o);
     }
     return orders;
   }
 
-  public static List<List<Integer>> generateRandomJumpMatrix(int size) {
+  public static List<List<Integer>> generateRandomSwitchMatrix(int size) {
     Random rand = new Random(RAND_SEED);
-    List<List<Integer>> jump_matrix = new ArrayList<>();
+    List<List<Integer>> switch_matrix = new ArrayList<>();
     for (int i = 0; i < size; i++) {
       List<Integer> row = new ArrayList<>();
       for (int j = 0; j < size; j++) {
         row.add(rand.nextInt(MAX_SWITCH_TIME) + MIN_SWITCH_TIME);
       }
-      jump_matrix.add(row);
+      switch_matrix.add(row);
     }
-    return jump_matrix;
+    return switch_matrix;
   }
 
-  public static Integer getJumpTime(final List<List<Integer>> jump_matrix,
-                                    final Order o1, final Order o2) {
-    return o1 == null ? 0 : jump_matrix.get(o1.order_id).get(o2.order_id);
+  public static Integer getSwitchTime(final List<List<Integer>> switch_matrix,
+                                      final Order o1, final Order o2) {
+    return o1 == null ? 0
+                      : switch_matrix.get(o1.product_type).get(o2.product_type);
   }
 
   public static List<Machine> generateRandomMachine(int size) {
@@ -192,11 +199,11 @@ class APSDemo {
       implements Comparator<Order> {
     @Override
     public int compare(Order o1, Order o2) {
-      return o1.earlest_start_date < o2.earlest_start_date ||
+      return o1.earlest_start_date > o2.earlest_start_date ||
               (o1.earlest_start_date == o2.earlest_start_date &&
-               o1.priority > o2.priority) ||
+               o1.priority < o2.priority) ||
               (o1.earlest_start_date == o2.earlest_start_date &&
-               o1.priority == o2.priority && o1.due_date < o2.due_date)
+               o1.priority == o2.priority && o1.due_date > o2.due_date)
           ? 1
           : -1;
     }
@@ -284,7 +291,7 @@ class APSDemo {
 
   public static PriorityQueue<Machine>
   first_free_Machines(final List<Order> orders,
-                      final List<List<Integer>> jump_matrix,
+                      final List<List<Integer>> switch_matrix,
                       List<Machine> machines) {
     PriorityQueue<Machine> machine_queue =
         new PriorityQueue<>(new CompareMachineByFreeTime());
@@ -301,7 +308,7 @@ class APSDemo {
           o.quantity / best_machine.machine_product_per_hour +
           (best_machine.orders_in_queue.isEmpty()
                ? 0
-               : getJumpTime(jump_matrix, best_machine.getLastOrder(), o));
+               : getSwitchTime(switch_matrix, best_machine.getLastOrder(), o));
       // update the finishing time
       best_machine.finishing_time = finishing_time;
       // update the order queue
@@ -315,7 +322,7 @@ class APSDemo {
   // Optimize first_free_Machines with checking the two orders at the same time
   public static PriorityQueue<Machine>
   first_free_Machines_optimize1(final List<Order> orders,
-                                final List<List<Integer>> jump_matrix,
+                                final List<List<Integer>> switch_matrix,
                                 List<Machine> machines) {
     PriorityQueue<Machine> machine_queue =
         new PriorityQueue<>(new CompareMachineByFreeTime());
@@ -333,12 +340,12 @@ class APSDemo {
           o1.quantity / best_machine.machine_product_per_hour +
           (best_machine.orders_in_queue.isEmpty()
                ? 0
-               : getJumpTime(jump_matrix, best_machine.getLastOrder(), o1));
+               : getSwitchTime(switch_matrix, best_machine.getLastOrder(), o1));
       int required_time2 =
           o2.quantity / best_machine.machine_product_per_hour +
           (best_machine.orders_in_queue.isEmpty()
                ? 0
-               : getJumpTime(jump_matrix, best_machine.getLastOrder(), o2));
+               : getSwitchTime(switch_matrix, best_machine.getLastOrder(), o2));
       // 1. if o1 has higher priority, put o1 first
       // 2. same priority, if rt1 + rt2 < both o1 and o2's due date, put the one
       // with shorter switch time first
@@ -349,23 +356,24 @@ class APSDemo {
       // again next time
       // TODO: find other rules to optimize the schedule
       // FIXME: Potential bug: the output is not better than the original ???
-      if (o1.priority > o2.priority) {
-        best_machine.finishing_time += required_time1;
-        best_machine.orders_in_queue.add(o1);
-        o1 = o2;
-      } else if (o1.priority == o2.priority) {
+      // if (o1.priority > o2.priority) {
+      //   best_machine.finishing_time += required_time1;
+      //   best_machine.orders_in_queue.add(o1);
+      //   o1 = o2;
+      // } else if (o1.priority == o2.priority) {
         int estimate_time = best_machine.finishing_time + required_time1 +
-                            required_time2 + getJumpTime(jump_matrix, o1, o2);
+                            required_time2 +
+                            getSwitchTime(switch_matrix, o1, o2);
         if (estimate_time < o1.due_date && estimate_time < o2.due_date) {
           // have enough time to finish both orders
-          // find the shortest jump time sequence
-          int jump_time1 =
-              getJumpTime(jump_matrix, best_machine.getLastOrder(), o1) +
-              getJumpTime(jump_matrix, o1, o2);
-          int jump_time2 =
-              getJumpTime(jump_matrix, best_machine.getLastOrder(), o2) +
-              getJumpTime(jump_matrix, o2, o1);
-          if (jump_time1 < jump_time2) {
+          // find the shortest switch time sequence
+          int switch_time1 =
+              getSwitchTime(switch_matrix, best_machine.getLastOrder(), o1) +
+              getSwitchTime(switch_matrix, o1, o2);
+          int switch_time2 =
+              getSwitchTime(switch_matrix, best_machine.getLastOrder(), o2) +
+              getSwitchTime(switch_matrix, o2, o1);
+          if (switch_time1 < switch_time2) {
             best_machine.finishing_time += required_time1;
             best_machine.orders_in_queue.add(o1);
             o1 = o2;
@@ -385,10 +393,10 @@ class APSDemo {
             best_machine.orders_in_queue.add(o2);
           }
         }
-      } else { // if (o1.priority < o2.priority)
-        best_machine.finishing_time += required_time2;
-        best_machine.orders_in_queue.add(o2);
-      }
+      // } else { // if (o1.priority < o2.priority)
+      //   best_machine.finishing_time += required_time2;
+      //   best_machine.orders_in_queue.add(o2);
+      // }
       // push the machine back to the queue
       machine_queue.add(best_machine);
     }
@@ -399,7 +407,7 @@ class APSDemo {
         o1.quantity / best_machine.machine_product_per_hour +
         (best_machine.orders_in_queue.isEmpty()
              ? 0
-             : getJumpTime(jump_matrix, best_machine.getLastOrder(), o1));
+             : getSwitchTime(switch_matrix, best_machine.getLastOrder(), o1));
     best_machine.finishing_time += required_time;
     best_machine.orders_in_queue.add(o1);
     machine_queue.add(best_machine);
@@ -407,28 +415,28 @@ class APSDemo {
     return machine_queue;
   }
 
-  // optimize the jumping/switch time
+  // optimize the switching/switch time
   public static List<Machine>
   optimize_switch_time(final List<Order> orders,
-                       final List<List<Integer>> jump_matrix,
+                       final List<List<Integer>> switch_matrix,
                        List<Machine> machines) {
     for (Order o : orders) {
       // find the best machine to put the order
       Machine best_machine = machines.get(0);
-      int best_machine_jump_time =
-          getJumpTime(jump_matrix, best_machine.getLastOrder(), o);
+      int best_machine_switch_time =
+          getSwitchTime(switch_matrix, best_machine.getLastOrder(), o);
       for (int i = 1; i < machines.size(); i++) {
         Machine m = machines.get(i);
-        int jump_time = getJumpTime(jump_matrix, m.getLastOrder(), o);
-        if (best_machine_jump_time > jump_time) {
+        int switch_time = getSwitchTime(switch_matrix, m.getLastOrder(), o);
+        if (best_machine_switch_time > switch_time) {
           best_machine = m;
-          best_machine_jump_time = jump_time;
+          best_machine_switch_time = switch_time;
         }
       }
       // calculate the finishing time
       int finishing_time = best_machine.finishing_time +
                            o.quantity / best_machine.machine_product_per_hour +
-                           best_machine_jump_time;
+                           best_machine_switch_time;
       // update the finishing time
       best_machine.finishing_time = finishing_time;
       // update the order queue
@@ -438,10 +446,10 @@ class APSDemo {
   }
 
   // optimize optimize_switch_time with using a priority queue to
-  // store the fist free machine when having same jump time
+  // store the fist free machine when having same switch time
   public static List<Machine>
   optimize_switch_time_optimize1(final List<Order> orders,
-                                 final List<List<Integer>> jump_matrix,
+                                 final List<List<Integer>> switch_matrix,
                                  List<Machine> machines) {
     PriorityQueue<Machine> machine_queue =
         new PriorityQueue<>(new CompareMachineByFreeTime());
@@ -449,7 +457,7 @@ class APSDemo {
       machine_queue.clear();
       int machine_queue_switch_time = Integer.MAX_VALUE;
       for (Machine m : machines) {
-        int switch_time = getJumpTime(jump_matrix, m.getLastOrder(), o);
+        int switch_time = getSwitchTime(switch_matrix, m.getLastOrder(), o);
         if (switch_time < machine_queue_switch_time) {
           machine_queue.clear();
           machine_queue.add(m);
@@ -481,6 +489,41 @@ class APSDemo {
     }
   }
 
+  // combine the optimization of osto1 and ffmo1
+  // add a compare order to select the best order to put in the machine
+  public static List<Machine>
+  optimize_switch_time_optimize2(final List<Order> orders,
+                                 final List<List<Integer>> switch_matrix,
+                                 List<Machine> machines) {
+    PriorityQueue<Machine> machine_queue =
+        new PriorityQueue<>(new CompareMachineByFreeTime());
+    for (Order o : orders) {
+      machine_queue.clear();
+      int machine_queue_switch_time = Integer.MAX_VALUE;
+      for (Machine m : machines) {
+        int switch_time = getSwitchTime(switch_matrix, m.getLastOrder(), o);
+        if (switch_time < machine_queue_switch_time) {
+          machine_queue.clear();
+          machine_queue.add(m);
+          machine_queue_switch_time = switch_time;
+        } else if (switch_time == machine_queue_switch_time) {
+          machine_queue.add(m);
+        }
+      }
+      // find the best machine to put the order
+      Machine best_machine = machine_queue.poll();
+      // calculate the finishing time
+      int finishing_time = best_machine.finishing_time +
+                           o.quantity / best_machine.machine_product_per_hour +
+                           machine_queue_switch_time;
+      // update the finishing time
+      best_machine.finishing_time = finishing_time;
+      // update the order queue
+      best_machine.orders_in_queue.add(o);
+    }
+    return machines;
+  }
+
   public static void printMachine(List<Machine> machines, boolean print_order) {
     for (Machine m : machines) {
       System.out.print("Machine: " + m.name +
@@ -505,7 +548,7 @@ class APSDemo {
     }
   }
 
-  public static void evaluateSchedule(final List<List<Integer>> jump_matrix,
+  public static void evaluateSchedule(final List<List<Integer>> switch_matrix,
                                       final List<Machine> machines,
                                       boolean verbose) {
 
@@ -514,20 +557,21 @@ class APSDemo {
     ArrayList<Pair<Order, Integer>> total_order_on_time = new ArrayList<>();
     ArrayList<Pair<Order, Integer>> total_order_late = new ArrayList<>();
     for (Machine m : machines) {
-      Integer previous_order = -1;
+      Integer previous_order_type = -1;
       double work_time = 0;
       double switch_time = 0;
       for (Order o : m.orders_in_queue) {
         work_time += o.quantity / m.machine_product_per_hour;
-        if (previous_order != -1) {
-          switch_time += jump_matrix.get(previous_order).get(o.order_id);
+        if (previous_order_type != -1) {
+          switch_time +=
+              switch_matrix.get(previous_order_type).get(o.product_type);
         }
         if (work_time + switch_time > o.due_date * 24) {
           total_order_late.add(new Pair<>(o, o.due_date - (int)work_time));
         } else {
           total_order_on_time.add(new Pair<>(o, o.due_date - (int)work_time));
         }
-        previous_order = o.order_id;
+        previous_order_type = o.product_type;
       }
       total_switch_time.add(switch_time);
       total_work_time.add(work_time);
@@ -588,15 +632,15 @@ class APSDemo {
                        " Total Order late: " + total_order_late_sum);
   }
 
-  public static void outputJPMatrix2CSV(List<List<Integer>> jump_matrix,
+  public static void outputSWMatrix2CSV(List<List<Integer>> switch_matrix,
                                         String filename) {
     try {
       File file = new File(filename);
       FileWriter fw = new FileWriter(file);
-      for (int i = 0; i < jump_matrix.size(); i++) {
-        for (int j = 0; j < jump_matrix.get(i).size(); j++) {
-          fw.write(jump_matrix.get(i).get(j).toString());
-          if (j != jump_matrix.get(i).size() - 1) {
+      for (int i = 0; i < switch_matrix.size(); i++) {
+        for (int j = 0; j < switch_matrix.get(i).size(); j++) {
+          fw.write(switch_matrix.get(i).get(j).toString());
+          if (j != switch_matrix.get(i).size() - 1) {
             fw.write(",");
           }
         }
@@ -608,7 +652,8 @@ class APSDemo {
     }
   }
 
-  public static void outputSchedule2CSV(List<Machine> machines,
+  public static void outputSchedule2CSV(List<List<Integer>> switch_matrix,
+                                        List<Machine> machines,
                                         String filename) {
     try {
       File file = new File(filename);
@@ -625,7 +670,7 @@ class APSDemo {
       // write the header
       fw.write("Machine ID,Machine Product Per Hour,");
       for (int i = 0; i < max_order_queue_length; i++) {
-        fw.write("Order ID,Quantity,Priority,Due Date,Earliest Start Date");
+        fw.write("Order ID,Quantity,Switch Time,Start Hour,End Hour");
         if (i != max_order_queue_length - 1) {
           fw.write(",");
         }
@@ -634,14 +679,32 @@ class APSDemo {
 
       // write the content
       for (Machine m : machines) {
-        fw.write(m.machine_id + "," + m.machine_product_per_hour + ",");
-        for (Order o : m.orders_in_queue) {
-          fw.write(o.order_id + "," + o.quantity + "," + o.priority + "," +
-                   o.due_date + "," + o.earlest_start_date);
-          if (o != m.orders_in_queue.get(m.orders_in_queue.size() - 1)) {
-            fw.write(",");
+        int current_time = 0;
+        fw.write(m.machine_id + "," + m.machine_product_per_hour);
+        for (int i = 0; i < max_order_queue_length; i++) {
+          if (i < m.orders_in_queue.size()) {
+            Order o = m.orders_in_queue.get(i);
+            int duration =
+                o.quantity / m.machine_product_per_hour +
+                (i == 0 ? 0
+                        : getSwitchTime(switch_matrix, m.getLastOrder(), o));
+            fw.write("," + o.order_id + "," + o.quantity + "," +
+                     (i == 0
+                          ? 0
+                          : getSwitchTime(switch_matrix, m.getLastOrder(), o)) +
+                     "," + current_time + "," + (current_time + duration));
+            current_time += duration;
+          } else if (i != max_order_queue_length) {
+            fw.write(",-1,-1,-1,-1,-1");
           }
         }
+        // for (Order o : m.orders_in_queue) {
+        //   fw.write(o.order_id + "," + o.quantity + "," + o.priority + "," +
+        //            o.due_date + "," + o.earlest_start_date);
+        //   if (o != m.orders_in_queue.get(m.orders_in_queue.size() - 1)) {
+        //     fw.write(",");
+        //   }
+        // }
         fw.write("\n");
       }
       fw.close();
@@ -657,20 +720,18 @@ class APSDemo {
     }
   }
 
-  public static void main(String[] args) {
-    MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
-    MemoryUsage heapMemoryUsage = memoryBean.getHeapMemoryUsage();
+  public static void main(String[] args) throws Exception {
     // print out the final static parameters
     System.out.println("\n");
     System.out.print(
         "Product Num: " + PRODUCT_NUM + " Machine Num: " + MACHINE_NUM +
         " Priority Num: " + PRIORITY_NUM +
         " Machine Product Per Hour: " + MACHINE_PRODUCT_PER_HOUR +
-        " Min Product Quantity: " + MIN_PRODUCT_QUANTITY +
-        " Max Product Quantity: " +
+        " Product Quantity: " + MIN_PRODUCT_QUANTITY + "-" +
         (MAX_PRODUCT_QUANTITY + MIN_PRODUCT_QUANTITY) +
-        "\nMin Switch Time: " + MIN_SWITCH_TIME + " Max Switch Time: " +
-        (MAX_SWITCH_TIME + MIN_SWITCH_TIME) + " Max ESD Date: " + MAX_ESD_DATE +
+        " Total Product Type: " + PRODUCT_TYPE_NUM + "\nSwitch Time: " +
+        MIN_SWITCH_TIME + "-" + (MAX_SWITCH_TIME + MIN_SWITCH_TIME - 1) +
+        " Max ESD Date: " + MAX_ESD_DATE +
         " Min Due Start Interval: " + MIN_DUE_START_INTERVAL +
         " Max DDL Date: " + (MAX_DDL_DATE + MIN_DUE_START_INTERVAL) +
         " Sort Method: ");
@@ -707,14 +768,15 @@ class APSDemo {
     }
     System.out.println("\n");
 
-    List<List<Integer>> jump_matrix = generateRandomJumpMatrix(PRODUCT_NUM);
+    List<List<Integer>> switch_matrix =
+        generateRandomSwitchMatrix(PRODUCT_TYPE_NUM);
     List<Machine> machines = generateRandomMachine(MACHINE_NUM);
-    if (OUTPUT_JUMP_MATRIX) {
-      outputJPMatrix2CSV(jump_matrix, "jump_matrix.csv");
+    if (OUTPUT_SWITCH_MATRIX) {
+      outputSWMatrix2CSV(switch_matrix, "switch_matrix.csv");
     }
 
     long startTime = System.nanoTime();
-    first_free_Machines(orders, jump_matrix, machines);
+    first_free_Machines(orders, switch_matrix, machines);
     long endTime = System.nanoTime();
     switch (PRINT_FLAG) {
     case 4:
@@ -722,26 +784,29 @@ class APSDemo {
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
     case 2:
-      evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
+      evaluateSchedule(switch_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("First free machine time: " +
                          (double)(endTime - startTime) / 1000000 + "ms\n");
+      break;
     default:
       break;
     }
     if (OUTPUT_SCHEDULE) {
-      outputSchedule2CSV(machines, "schedule.csv");
+      outputSchedule2CSV(switch_matrix, machines, "schedule.csv");
     }
 
     cleanMachine(machines);
     startTime = System.nanoTime();
-    first_free_Machines_optimize1(orders, jump_matrix, machines);
+    first_free_Machines_optimize1(orders, switch_matrix, machines);
     endTime = System.nanoTime();
     switch (PRINT_FLAG) {
+    case 4:
+      printOrders(orders);
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
     case 2:
-      evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
+      evaluateSchedule(switch_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("First free machine optimized -o1 time: " +
                          (double)(endTime - startTime) / 1000000 + "ms\n");
@@ -749,18 +814,20 @@ class APSDemo {
       break;
     }
     if (OUTPUT_SCHEDULE) {
-      outputSchedule2CSV(machines, "schedule_optimize1.csv");
+      outputSchedule2CSV(switch_matrix, machines, "schedule_optimize1.csv");
     }
 
     cleanMachine(machines);
     startTime = System.nanoTime();
-    optimize_switch_time(orders, jump_matrix, machines);
+    optimize_switch_time(orders, switch_matrix, machines);
     endTime = System.nanoTime();
     switch (PRINT_FLAG) {
+    case 4:
+      printOrders(orders);
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
     case 2:
-      evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
+      evaluateSchedule(switch_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("Optimize switch time time: " +
                          (double)(endTime - startTime) / 1000000 + "ms\n");
@@ -768,28 +835,33 @@ class APSDemo {
       break;
     }
     if (OUTPUT_SCHEDULE) {
-      outputSchedule2CSV(machines, "schedule_switch_time.csv");
+      outputSchedule2CSV(switch_matrix, machines, "schedule_switch_time.csv");
     }
 
     cleanMachine(machines);
     startTime = System.nanoTime();
-    optimize_switch_time_optimize1(orders, jump_matrix, machines);
+    optimize_switch_time_optimize1(orders, switch_matrix, machines);
     endTime = System.nanoTime();
     switch (PRINT_FLAG) {
+    case 4:
+      printOrders(orders);
     case 3:
       printMachine(machines, PRINT_FLAG >= 4);
     case 2:
-      evaluateSchedule(jump_matrix, machines, PRINT_FLAG >= 3);
+      evaluateSchedule(switch_matrix, machines, PRINT_FLAG >= 3);
     case 1:
       System.out.println("Optimize switch time optimized -o1 time: " +
                          (double)(endTime - startTime) / 1000000 + "ms\n");
-      System.out.println(
-          "Max Heap Memory: " + heapMemoryUsage.getMax() / 1024 / 1024 + "MB");
+      MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+      MemoryUsage heapMemoryUsage = memoryBean.getHeapMemoryUsage();
+      System.out.println("Heap Memory Usage: " +
+                         heapMemoryUsage.getUsed() / 1024 / 1024 + "MB");
     default:
       break;
     }
     if (OUTPUT_SCHEDULE) {
-      outputSchedule2CSV(machines, "schedule_switch_time_optimize1.csv");
+      outputSchedule2CSV(switch_matrix, machines,
+                         "schedule_switch_time_optimize1.csv");
     }
 
     System.out.println("\n\n");

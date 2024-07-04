@@ -8019,9 +8019,9 @@ Output: the final state s</p>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="6409f35e-6612-466f-bdbb-15b01336f753" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="bffac40e-ccff-47fb-97b5-46b3a1932c01" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('6409f35e-6612-466f-bdbb-15b01336f753');
+var element = document.getElementById('bffac40e-ccff-47fb-97b5-46b3a1932c01');
 import notebook
 notebook.nbextensions.check_nbextension('nb-mermaid',user=True)
 require(['base/js/utils'],
@@ -8052,6 +8052,10 @@ function(utils) {
 </ul>
 <h2 id="3.-Features">3. Features<a class="anchor-link" href="#3.-Features">¶</a></h2><ul>
 <li>Use greedy algorithm to find the local best solution.</li>
+<li>Minimize objects:
+* Total switching time
+* Makespan
+* ...</li>
 <li>Can resume the process from the last saved state(good for what-if analysis).</li>
 </ul>
 <h2 id="4.-Input-and-output-of-the-algorithms">4. Input and output of the algorithms<a class="anchor-link" href="#4.-Input-and-output-of-the-algorithms">¶</a></h2><ul>
@@ -8064,7 +8068,7 @@ flowchart TD
         A[客户订单] ==&gt; B[工厂订单]
         B ==&gt; C[按排序订单排序]
         C ==&gt; D[查找可用机器\n 应用规则]
-        D ==&gt; E[查找最佳机器并分配订单]
+        D ==&gt; E[查找最佳机器并分配订单\n 应用规则]
         E ==&gt; F{更多订单？}
         F ==&gt;|是| C
         F ==&gt;|否| G[结束]
@@ -8075,7 +8079,8 @@ flowchart TD
         D ==> E[Finding the best machine and assign the order]
         E ==> F{More Orders?}
         F ==>|Yes| C
-        F ==>|No| G[End] -->
+        F ==>|No| G[End] 
+-->
 </div>
 </div>
 </div>
@@ -8093,6 +8098,7 @@ flowchart TD
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">due_date</span><span class="p">;</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">priority</span><span class="p">;</span>
 <span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">earlest_start_date</span><span class="p">;</span>
+<span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">product_type</span><span class="p">;</span>
 
 <span class="w">    </span><span class="p">...</span>
 <span class="w">  </span><span class="p">}</span>
@@ -8108,10 +8114,10 @@ flowchart TD
 <span class="w">  </span><span class="p">}</span>
 </pre></div>
 <h2 id="7.-Algorithm">7. Algorithm<a class="anchor-link" href="#7.-Algorithm">¶</a></h2><p><strong>Optimize switch time optimized -o1</strong></p>
-<div class="highlight"><pre><span></span><span class="c1">// store the fist free machines when having same jump time</span>
+<div class="highlight"><pre><span></span><span class="c1">// store the fist free machines when having same switch time</span>
 <span class="w">  </span><span class="kd">public</span><span class="w"> </span><span class="kd">static</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Machine</span><span class="o">&gt;</span>
 <span class="w">  </span><span class="nf">optimize_switch_time_optimize1</span><span class="p">(</span><span class="kd">final</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Order</span><span class="o">&gt;</span><span class="w"> </span><span class="n">orders</span><span class="p">,</span>
-<span class="w">                                 </span><span class="kd">final</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Integer</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">jump_matrix</span><span class="p">,</span>
+<span class="w">                                 </span><span class="kd">final</span><span class="w"> </span><span class="n">List</span><span class="o">&lt;</span><span class="n">List</span><span class="o">&lt;</span><span class="n">Integer</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">switch_matrix</span><span class="p">,</span>
 <span class="w">                                 </span><span class="n">List</span><span class="o">&lt;</span><span class="n">Machine</span><span class="o">&gt;</span><span class="w"> </span><span class="n">machines</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">PriorityQueue</span><span class="o">&lt;</span><span class="n">Machine</span><span class="o">&gt;</span><span class="w"> </span><span class="n">machine_queue</span><span class="w"> </span><span class="o">=</span>
 <span class="w">        </span><span class="k">new</span><span class="w"> </span><span class="n">PriorityQueue</span><span class="o">&lt;&gt;</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">CompareMachineByFreeTime</span><span class="p">());</span>
@@ -8119,7 +8125,7 @@ flowchart TD
 <span class="w">      </span><span class="n">machine_queue</span><span class="p">.</span><span class="na">clear</span><span class="p">();</span>
 <span class="w">      </span><span class="kt">int</span><span class="w"> </span><span class="n">machine_queue_switch_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Integer</span><span class="p">.</span><span class="na">MAX_VALUE</span><span class="p">;</span>
 <span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">Machine</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">machines</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">switch_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getJumpTime</span><span class="p">(</span><span class="n">jump_matrix</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="na">getLastOrder</span><span class="p">(),</span><span class="w"> </span><span class="n">o</span><span class="p">);</span>
+<span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">switch_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getSwitchTime</span><span class="p">(</span><span class="n">switch_matrix</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="na">getLastOrder</span><span class="p">(),</span><span class="w"> </span><span class="n">o</span><span class="p">);</span>
 <span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">switch_time</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">machine_queue_switch_time</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">          </span><span class="n">machine_queue</span><span class="p">.</span><span class="na">clear</span><span class="p">();</span>
 <span class="w">          </span><span class="n">machine_queue</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="n">m</span><span class="p">);</span>
@@ -8164,7 +8170,7 @@ flowchart TD
 </li>
 <li><p><strong>Finding Machines with Minimum Switch Time</strong>:</p>
 <div class="highlight"><pre><span></span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">Machine</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">machines</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">switch_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getJumpTime</span><span class="p">(</span><span class="n">jump_matrix</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="na">getLastOrder</span><span class="p">(),</span><span class="w"> </span><span class="n">o</span><span class="p">);</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">switch_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">getSwitchTime</span><span class="p">(</span><span class="n">switch_matrix</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">.</span><span class="na">getLastOrder</span><span class="p">(),</span><span class="w"> </span><span class="n">o</span><span class="p">);</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">switch_time</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">machine_queue_switch_time</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">machine_queue</span><span class="p">.</span><span class="na">clear</span><span class="p">();</span>
 <span class="w">        </span><span class="n">machine_queue</span><span class="p">.</span><span class="na">add</span><span class="p">(</span><span class="n">m</span><span class="p">);</span>
@@ -8175,7 +8181,7 @@ flowchart TD
 <span class="p">}</span>
 </pre></div>
 <ul>
-<li>For each machine, the switch time to the current order is calculated using the <code>getJumpTime</code> method.</li>
+<li>For each machine, the switch time to the current order is calculated using the <code>getSwitchTime</code> method.</li>
 <li>If the calculated switch time is less than the current minimum <code>machine_queue_switch_time</code>, the priority queue is cleared and the current machine is added to the queue, and the minimum switch time is updated.</li>
 <li>If the calculated switch time equals the current minimum, the machine is added to the queue without clearing it.</li>
 </ul>
@@ -8245,20 +8251,18 @@ flowchart TD
     A[开始] ==&gt; B[订单排序列表]
     B==&gt;C[迭代订单]
     C==&gt;D[清除每个订单的机器优先队列]
-    D ==&gt; E[将最小切换时间初始化为无穷大]
+    D ==&gt; E[将最小换行时间初始化为无穷大]
     E ==&gt; F{迭代机器}
-    F ==&gt; G[计算最小切换时间]
-    F==&gt;G[计算每台机器的切换时间]
-    G ==&gt; H{切换时间 &lt; 最短切换时间？}
+    F ==&gt; G[计算换行时间]
+    G ==&gt; H{换行时间 &lt; 最短换行时间？}
     H==&gt;|是| I[清除优先队列并添加机]
-    I ==&gt; J[更新最短切换时间]
-    H ==&gt;|否| K{切换时间 == 最少切换时间？}
+    I ==&gt; J[更新最短换行时间]
+    H ==&gt;|否| K{换行时间 == 最少换行时间？}
     K ==&gt;|是| L[将机器添加到优先队列]
-    K ==&gt;|否| F
     K ==&gt;|否| F
     J ==&gt; F
     L ==&gt; F
-    F==&gt;|循环结束| M[检索具有最短切换时间的机器]
+    F==&gt;|循环结束| M[检索具有最短换行时间的机器]
     M==&gt;N[计算完成时间]
     N==&gt;O[更新机器的加工时间]
     O ==&gt; P[向机器队列添加订单]
@@ -8276,6 +8280,17 @@ flowchart TD
 <li>More complex rules.</li>
 <li>...</li>
 </ol>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<h2 id="deal-with-optimize-window">deal with optimize window<a class="anchor-link" href="#deal-with-optimize-window">¶</a></h2><p>Every machine add a buffer, when we add a new</p>
 </div>
 </div>
 </div>
